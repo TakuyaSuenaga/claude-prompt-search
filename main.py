@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
-Claude Agent SDK Prompt Loading Order Investigation
+Claude Agent SDK プロンプト読み込み検証スクリプト
 
-This script runs a simple Claude Agent SDK query and logs
-the order in which prompt files are loaded.
+このスクリプトは3つのパターンでプロンプトファイルの読み込みを検証します：
+1. CLAUDE.md のみ
+2. 外部プロンプトファイル（Design.md）のみ
+3. 両方を同時に使用
+
+各パターンで、Claudeに読み込んだプロンプトの内容を報告させて検証します。
 """
 
 import asyncio
@@ -11,10 +15,10 @@ import logging
 import sys
 from pathlib import Path
 
-# Set up detailed logging
+# ログ設定
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
         logging.FileHandler('prompt_loading.log')
@@ -23,108 +27,177 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Monkey-patch file reading functions to trace prompt loading
-original_open = open
-file_read_order = []
 
-def traced_open(file, *args, **kwargs):
-    """Wrapper around open() to trace file reads"""
-    result = original_open(file, *args, **kwargs)
+async def test_pattern_1_claude_md():
+    """パターン1: CLAUDE.md のみを読み込む"""
+    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
 
-    # Check if this looks like a prompt file being read
-    if isinstance(file, (str, Path)):
-        file_str = str(file)
-        # Track reads of .md files and system prompt files
-        if any(pattern in file_str.lower() for pattern in [
-            'claude.md', '.claude', '.md', 'system', 'prompt', 'instruction', 'settings'
-        ]) and not any(exclude in file_str.lower() for exclude in [
-            'site-packages', 'node_modules', '__pycache__'
-        ]):
-            file_read_order.append(file_str)
-            logger.info(f"📄 FILE READ: {file_str}")
+    logger.info("=" * 80)
+    logger.info("パターン1: CLAUDE.md のみ")
+    logger.info("=" * 80)
 
-    return result
+    options = ClaudeAgentOptions(
+        system_prompt={
+            "type": "preset",
+            "preset": "claude_code"
+        },
+        setting_sources=["project"],  # CLAUDE.mdを読み込む
+        allowed_tools=["Read"],
+        permission_mode="acceptEdits"
+    )
 
-# Apply the monkey-patch
-import builtins
-builtins.open = traced_open
+    verification_prompt = """
+読み込まれたプロンプトファイルについて報告してください：
+
+1. どのファイルが読み込まれましたか？
+2. プロンプトの冒頭部分（最初の100文字）を引用してください
+3. あなたの役割は何ですか？
+"""
+
+    print("\n" + "=" * 80)
+    print("【パターン1】CLAUDE.md のみ - 検証結果")
+    print("=" * 80 + "\n")
+
+    async for message in query(prompt=verification_prompt, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    print(block.text)
+                    logger.info(f"Response: {block.text[:200]}...")
+
+
+async def test_pattern_2_external_prompt():
+    """パターン2: 外部プロンプトファイル（Design.md）のみを読み込む"""
+    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+
+    logger.info("")
+    logger.info("=" * 80)
+    logger.info("パターン2: 外部プロンプトファイル（Design.md）のみ")
+    logger.info("=" * 80)
+
+    # 外部プロンプトを読み込む
+    prompt_path = Path("prompts-repo/Design.md")
+    with open(prompt_path, 'r', encoding='utf-8') as f:
+        external_prompt = f.read()
+
+    logger.info(f"外部プロンプト読み込み: {len(external_prompt)} 文字")
+
+    options = ClaudeAgentOptions(
+        system_prompt=external_prompt,  # 外部プロンプトを直接指定
+        allowed_tools=["Read"],
+        permission_mode="acceptEdits"
+    )
+
+    verification_prompt = """
+読み込まれたプロンプトについて報告してください：
+
+1. プロンプトのタイトルは何ですか？
+2. あなたの役割は何ですか？
+3. 使用可能なツールは何ですか？
+4. プロンプトの冒頭部分（最初の100文字）を引用してください
+"""
+
+    print("\n" + "=" * 80)
+    print("【パターン2】外部プロンプト（Design.md）のみ - 検証結果")
+    print("=" * 80 + "\n")
+
+    async for message in query(prompt=verification_prompt, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    print(block.text)
+                    logger.info(f"Response: {block.text[:200]}...")
+
+
+async def test_pattern_3_combined():
+    """パターン3: CLAUDE.md + 外部プロンプトを同時に使用"""
+    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+
+    logger.info("")
+    logger.info("=" * 80)
+    logger.info("パターン3: CLAUDE.md + 外部プロンプト（両方を使用）")
+    logger.info("=" * 80)
+
+    # 外部プロンプトを読み込む
+    prompt_path = Path("prompts-repo/Design.md")
+    with open(prompt_path, 'r', encoding='utf-8') as f:
+        external_prompt = f.read()
+
+    logger.info(f"外部プロンプト読み込み: {len(external_prompt)} 文字")
+
+    options = ClaudeAgentOptions(
+        system_prompt=external_prompt,   # 外部プロンプト
+        setting_sources=["project"],      # CLAUDE.md も読み込む
+        allowed_tools=["Read"],
+        permission_mode="acceptEdits"
+    )
+
+    verification_prompt = """
+両方のプロンプトファイルについて報告してください：
+
+1. **読み込まれたファイル**:
+   - CLAUDE.md は読み込まれましたか？
+   - Design.md は読み込まれましたか？
+
+2. **優先順位**:
+   - どちらのプロンプトが主要な役割を定義していますか？
+   - もう一方はどのように扱われていますか？
+
+3. **あなたの役割**:
+   - 現在、あなたの主要な役割は何ですか？
+"""
+
+    print("\n" + "=" * 80)
+    print("【パターン3】CLAUDE.md + 外部プロンプト（両方）- 検証結果")
+    print("=" * 80 + "\n")
+
+    async for message in query(prompt=verification_prompt, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    print(block.text)
+                    logger.info(f"Response: {block.text[:200]}...")
+
 
 async def main():
+    print("\n" + "=" * 80)
+    print("Claude Agent SDK プロンプト読み込み検証")
+    print("=" * 80)
+    print("\n3つのパターンで検証します：")
+    print("1. CLAUDE.md のみ")
+    print("2. 外部プロンプト（Design.md）のみ")
+    print("3. 両方を同時に使用")
+    print("\n" + "=" * 80)
+
     try:
-        from claude_agent_sdk import query, ClaudeAgentOptions
+        # パターン1: CLAUDE.md のみ
+        await test_pattern_1_claude_md()
 
-        logger.info("=" * 80)
-        logger.info("Starting Claude Agent SDK Prompt Loading Investigation")
-        logger.info("=" * 80)
+        # パターン2: 外部プロンプトのみ
+        await test_pattern_2_external_prompt()
 
-        # Create options to load project settings (including CLAUDE.md)
-        logger.info("Creating query with setting_sources=['project']...")
-        options = ClaudeAgentOptions(
-            system_prompt={
-                "type": "preset",
-                "preset": "claude_code"
-            },
-            setting_sources=["project"],  # This will load CLAUDE.md and .claude/ files
-            allowed_tools=["Read", "Write"],
-            permission_mode="acceptEdits"
-        )
+        # パターン3: 両方を使用
+        await test_pattern_3_combined()
 
-        logger.info("=" * 80)
-        logger.info("Prompt Files Read During Setup (in order):")
-        logger.info("=" * 80)
+        print("\n" + "=" * 80)
+        print("全ての検証が完了しました")
+        print("詳細なログは prompt_loading.log を参照してください")
+        print("=" * 80 + "\n")
 
-        for i, file_path in enumerate(file_read_order, 1):
-            logger.info(f"{i}. {file_path}")
-
-        logger.info("=" * 80)
-
-        # Run a simple task
-        logger.info("Running a simple test query...")
-        async for message in query(
-            prompt="Hello! Please respond with a simple greeting and tell me what files you can see.",
-            options=options
-        ):
-            logger.info(f"Message received: {type(message).__name__}")
-
-        logger.info("=" * 80)
-        logger.info("All Prompt Files Read (in order):")
-        logger.info("=" * 80)
-
-        for i, file_path in enumerate(file_read_order, 1):
-            logger.info(f"{i}. {file_path}")
-
-        logger.info("=" * 80)
-        logger.info("Investigation complete! Check prompt_loading.log for full details.")
+    except FileNotFoundError as e:
+        logger.error(f"ファイルが見つかりません: {e}")
+        logger.error("prompts-repo/Design.md が存在することを確認してください")
+        sys.exit(1)
 
     except ImportError as e:
-        logger.error("=" * 80)
-        logger.error("ERROR: Claude Agent SDK not installed")
-        logger.error("=" * 80)
-        logger.error(f"Import error: {e}")
-        logger.error("\nPlease install the Claude Agent SDK:")
-        logger.error("  pip install claude-agent-sdk")
-        logger.error("\nThen set your API key:")
-        logger.error("  export ANTHROPIC_API_KEY=your_api_key")
+        logger.error(f"インポートエラー: {e}")
+        logger.error("pip install claude-agent-sdk を実行してください")
         sys.exit(1)
 
     except Exception as e:
-        logger.error("=" * 80)
-        logger.error("ERROR: An error occurred")
-        logger.error("=" * 80)
-        logger.error(f"Error: {e}", exc_info=True)
-
-        # Still show files that were read
-        if file_read_order:
-            logger.info("=" * 80)
-            logger.info("Files Read Before Error:")
-            logger.info("=" * 80)
-            for i, file_path in enumerate(file_read_order, 1):
-                logger.info(f"{i}. {file_path}")
-
+        logger.error(f"エラーが発生しました: {e}", exc_info=True)
         sys.exit(1)
-    finally:
-        # Restore original open
-        builtins.open = original_open
+
 
 if __name__ == "__main__":
     asyncio.run(main())
