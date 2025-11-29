@@ -1,0 +1,5 @@
+# Claude Agent SDK
+claude-agent-sdk
+
+# Additional dependencies
+python-dotenv
