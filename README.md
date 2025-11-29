@@ -1,15 +1,15 @@
 # Claude Agent SDK Prompt Loading Order Investigation
 
-このプロジェクトは、Python版Claude Agent SDKがプロンプトファイルをどの順番で読み込むかを調査するための環境です。
+このプロジェクトは、Python版Claude Agent SDKがプロンプトファイルをどのように読み込むかを調査した結果をまとめたものです。
 
-## 🎯 目的
+## 🎯 調査結果（簡潔版）
 
-Claude Agent SDKが以下のファイルをどの順番で読み込むかを特定します:
-- `CLAUDE.md` (ルートディレクトリ)
-- `.claude/system.md`
-- `.claude/instructions.md`
-- `.claude/commands/*.md`
-- その他のプロンプト関連ファイル
+**→ [SUMMARY.md](SUMMARY.md) を参照してください**
+
+主な発見:
+- ✅ **CLAUDE.md**: `setting_sources=["project"]` で読み込まれる（プロジェクト統一プロンプト用）
+- ✅ **外部プロンプトファイル**: `system_prompt=file_content` で読み込まれる（マルチエージェント用）
+- どちらの方法でも、プロンプトは完全に読み込まれることを確認済み
 
 ## 📁 プロジェクト構成
 
@@ -177,38 +177,21 @@ logging.basicConfig(
 )
 ```
 
-## 🎯 調査結果サマリー
+## 📚 ドキュメント
 
-詳細な調査結果は [FINDINGS.md](FINDINGS.md) を参照してください。
+### 調査結果
 
-### 主要な発見
+- **[SUMMARY.md](SUMMARY.md)** - 📌 **最終報告（推奨）** - CLAUDE.mdと外部プロンプトの使い方
+- [PROMPT_LOADING_RESULTS.md](PROMPT_LOADING_RESULTS.md) - 詳細な検証結果
+- [FINDINGS.md](FINDINGS.md) - 初期調査レポート
 
-1. **CLAUDE.md が最強の優先順位**
-   - デフォルト動作をオーバーライド可能
-   - "MUST follow them exactly" という強い指示付き
+### ツール
 
-2. **読み込み順序（優先順位順）**
-   ```
-   1. [最高] Claude Codeコアシステムプロンプト
-   2. [高]   CLAUDE.md
-   3. [中]   .claude/system.md
-   4. [中]   .claude/instructions.md
-   5. [低]   .claude/commands/*.md（条件付き）
-   ```
-
-3. **setting_sources が重要**
-   - `setting_sources=["project"]` を指定しないとプロンプトファイルは読み込まれない
-   - 省略した場合、CLAUDE.mdも.claude/も無視される
-
-4. **Claude自身に聞くのが効果的**
-   - Pythonのmonkey patchingでは捕捉不可能
-   - CLI内部（Node.js/TypeScript）で読み込まれるため
-   - Claude自身に質問する方が確実
-
-## 📚 参考資料
-
-- [FINDINGS.md](FINDINGS.md) - 詳細な調査結果レポート
+- [verify_prompt_loading.py](verify_prompt_loading.py) - プロンプト読み込み検証スクリプト
 - [ask_claude.py](ask_claude.py) - Claude自身に質問するスクリプト
+
+### 参考資料
+
 - [Claude Agent SDK - Python リファレンス](https://code.claude.com/docs/ja/agent-sdk/python)
 - [Claude Agent SDK - 概要](https://code.claude.com/docs/ja/agent-sdk/overview)
 - [Anthropic API Documentation](https://docs.anthropic.com/)
