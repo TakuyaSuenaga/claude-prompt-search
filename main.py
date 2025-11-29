@@ -15,6 +15,8 @@ import logging
 import sys
 from pathlib import Path
 
+from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+
 # ログ設定
 logging.basicConfig(
     level=logging.INFO,
@@ -30,7 +32,6 @@ logger = logging.getLogger(__name__)
 
 async def test_pattern_1_claude_md():
     """パターン1: CLAUDE.md のみを読み込む"""
-    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
 
     logger.info("=" * 80)
     logger.info("パターン1: CLAUDE.md のみ")
@@ -68,8 +69,6 @@ async def test_pattern_1_claude_md():
 
 async def test_pattern_2_external_prompt():
     """パターン2: 外部プロンプトファイル（Design.md）のみを読み込む"""
-    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
-
     logger.info("")
     logger.info("=" * 80)
     logger.info("パターン2: 外部プロンプトファイル（Design.md）のみ")
@@ -111,8 +110,6 @@ async def test_pattern_2_external_prompt():
 
 async def test_pattern_3_combined():
     """パターン3: CLAUDE.md + 外部プロンプトを同時に使用"""
-    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
-
     logger.info("")
     logger.info("=" * 80)
     logger.info("パターン3: CLAUDE.md + 外部プロンプト（両方を使用）")
