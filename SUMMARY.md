@@ -125,15 +125,17 @@ You are an expert Design Agent specializing in..."
 
 ---
 
-## 🔍 比較: 2つの方法の違い
+## 🔍 比較: 3つの方法の違い
 
-| 項目 | CLAUDE.md | 外部ファイル |
-|------|-----------|-------------|
-| **設定方法** | `setting_sources=["project"]` | `system_prompt=読み込んだ内容` |
-| **ファイル名** | 固定（CLAUDE.md） | 自由（任意の名前） |
-| **配置場所** | プロジェクトルート | 任意の場所 |
-| **読み込み確認** | ✅ 完全に読み込まれる | ✅ 完全に読み込まれる |
-| **ファイル数** | 1つ | 複数可能 |
+| 項目 | CLAUDE.md | 外部ファイル | 両方を使用 |
+|------|-----------|-------------|-----------|
+| **設定方法** | `setting_sources=["project"]` | `system_prompt=読み込んだ内容` | 両方を指定 |
+| **ファイル名** | 固定（CLAUDE.md） | 自由（任意の名前） | 両方 |
+| **配置場所** | プロジェクトルート | 任意の場所 | 両方 |
+| **読み込み確認** | ✅ 完全に読み込まれる | ✅ 完全に読み込まれる | ✅ 両方読み込まれる |
+| **優先順位** | 単独で使用時は最優先 | 単独で使用時は最優先 | `system_prompt`が優先 |
+| **用途** | プロジェクト統一プロンプト | マルチエージェント | エージェント+プロジェクト情報 |
+| **ファイル数** | 1つ | 複数可能 | 複数可能 |
 
 ---
 
@@ -331,6 +333,88 @@ options = ClaudeAgentOptions(
 )
 ```
 
+**パターンC: 外部プロンプト + プロジェクト情報を組み合わせる**
+```python
+# エージェントの役割は外部リポジトリで管理
+# プロジェクト固有のルールはCLAUDE.mdで管理
+with open("prompts-repo/Design.md", 'r') as f:
+    design_prompt = f.read()
+
+options = ClaudeAgentOptions(
+    system_prompt=design_prompt,      # メイン: エージェントの役割
+    setting_sources=["project"]        # 補足: プロジェクト固有の情報
+)
+```
+
+---
+
+## 🔀 パターン3: 両方を同時に使用する設定
+
+**設定コード**:
+```python
+from claude_agent_sdk import ClaudeAgentOptions
+
+# 外部ファイルを読み込む
+with open("prompts-repo/Design.md", 'r', encoding='utf-8') as f:
+    external_prompt = f.read()
+
+options = ClaudeAgentOptions(
+    system_prompt=external_prompt,   # 外部プロンプト
+    setting_sources=["project"]       # CLAUDE.md も読み込む
+)
+```
+
+**ファイル構成**:
+```
+your-project/
+├── CLAUDE.md                # プロジェクト固有の情報
+└── prompts-repo/
+    └── Design.md            # メインのプロンプト
+```
+
+**結果**: ✅ **両方が読み込まれるが、優先順位がある**
+
+Claudeの報告:
+```
+優先順位:
+1. system_prompt (Design.md) が主要プロンプトとして機能
+2. setting_sources (CLAUDE.md) は <system-reminder> 内に配置され、補足コンテキストとして扱われる
+
+統合状況:
+- Design.md: メインのシステムプロンプト（役割、ツール、出力形式を定義）
+- CLAUDE.md: オプショナルなコンテキスト（タスクに関連する場合のみ使用）
+```
+
+**確認事項**:
+- ✅ 両方のファイルが読み込まれる
+- ✅ `system_prompt` が優先される（メインの役割を定義）
+- ✅ `setting_sources` は補足情報として扱われる
+- ⚠️ 矛盾する指示がある場合は混乱の可能性がある
+
+### 使い分けの例
+
+**ケースA: 外部プロンプト + プロジェクト情報**
+```python
+# Design Agentの役割は外部リポジトリで管理
+# プロジェクト固有のルールはCLAUDE.mdで管理
+with open("prompts-repo/Design.md", 'r') as f:
+    design_prompt = f.read()
+
+options = ClaudeAgentOptions(
+    system_prompt=design_prompt,      # メイン: Design Agent の役割
+    setting_sources=["project"]        # 補足: プロジェクト固有の情報
+)
+```
+
+**ケースB: 外部プロンプトのみ（完全制御）**
+```python
+# CLAUDE.mdの影響を受けたくない場合
+options = ClaudeAgentOptions(
+    system_prompt=design_prompt,      # メインのみ
+    # setting_sources は指定しない
+)
+```
+
 ---
 
 ## 🎓 重要なポイント
@@ -359,7 +443,11 @@ options = ClaudeAgentOptions(
 
 ## 📚 関連ファイル
 
+### 検証スクリプト
 - [verify_prompt_loading.py](verify_prompt_loading.py) - プロンプト読み込み検証スクリプト
+- [test_combined_prompts.py](test_combined_prompts.py) - 両方を同時に使用した場合の検証スクリプト
+
+### プロンプトファイルの例
 - [prompts-repo/Design.md](prompts-repo/Design.md) - 外部プロンプトファイルの例（3,209文字）
 - [CLAUDE.md](CLAUDE.md) - プロジェクトプロンプトの例
 
@@ -367,4 +455,7 @@ options = ClaudeAgentOptions(
 
 **調査日**: 2025-11-29
 **検証方法**: Claude自身に読み込んだプロンプトの内容を報告させる
-**結論**: CLAUDE.md と外部プロンプトファイル、どちらも完全に読み込まれることを確認
+**結論**:
+- CLAUDE.md と外部プロンプトファイル、どちらも完全に読み込まれることを確認
+- 両方を同時に使用可能だが、`system_prompt` が優先される
+- `setting_sources` は補足コンテキストとして `<system-reminder>` 内に配置される
