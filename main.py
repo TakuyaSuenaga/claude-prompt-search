@@ -156,14 +156,69 @@ async def test_pattern_3_combined():
                     logger.info(f"Response: {block.text[:200]}...")
 
 
+async def test_pattern_4_append():
+    """パターン4: Claude Codeプリセット + 外部プロンプト（append）+ CLAUDE.md"""
+    logger.info("")
+    logger.info("=" * 80)
+    logger.info("パターン4: Claude Code + 外部プロンプト（append）+ CLAUDE.md")
+    logger.info("=" * 80)
+
+    # 外部プロンプトを読み込む
+    prompt_path = Path("prompts-repo/Design.md")
+    with open(prompt_path, 'r', encoding='utf-8') as f:
+        external_prompt = f.read()
+
+    logger.info(f"外部プロンプト読み込み: {len(external_prompt)} 文字")
+
+    options = ClaudeAgentOptions(
+        system_prompt={
+            "type": "preset",
+            "preset": "claude_code",  # Claude Code標準プロンプト（ベース）
+            "append": external_prompt  # Design.mdを追加
+        },
+        setting_sources=["project"],  # CLAUDE.md も読み込む
+        allowed_tools=["Read"],
+        permission_mode="acceptEdits"
+    )
+
+    verification_prompt = """
+3つのプロンプトソースについて報告してください：
+
+1. **読み込まれたプロンプト**:
+   - Claude Code標準プロンプトは読み込まれていますか？
+   - Design.md（appendで追加）は読み込まれていますか？
+   - CLAUDE.md（setting_sources）は読み込まれていますか？
+
+2. **優先順位と統合状況**:
+   - それぞれがどのように統合されていますか？
+   - 主要な役割を定義しているのはどれですか？
+
+3. **あなたの役割**:
+   - 現在、あなたの主要な役割は何ですか？
+   - どのプロンプトの影響を最も受けていますか？
+"""
+
+    print("\n" + "=" * 80)
+    print("【パターン4】Claude Code + append + CLAUDE.md - 検証結果")
+    print("=" * 80 + "\n")
+
+    async for message in query(prompt=verification_prompt, options=options):
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    print(block.text)
+                    logger.info(f"Response: {block.text[:200]}...")
+
+
 async def main():
     print("\n" + "=" * 80)
     print("Claude Agent SDK プロンプト読み込み検証")
     print("=" * 80)
-    print("\n3つのパターンで検証します：")
+    print("\n4つのパターンで検証します：")
     print("1. CLAUDE.md のみ")
     print("2. 外部プロンプト（Design.md）のみ")
-    print("3. 両方を同時に使用")
+    print("3. 外部プロンプト + CLAUDE.md（両方を同時に使用）")
+    print("4. Claude Code + 外部プロンプト（append）+ CLAUDE.md")
     print("\n" + "=" * 80)
 
     try:
@@ -175,6 +230,9 @@ async def main():
 
         # パターン3: 両方を使用
         await test_pattern_3_combined()
+
+        # パターン4: append を使用
+        await test_pattern_4_append()
 
         print("\n" + "=" * 80)
         print("全ての検証が完了しました")

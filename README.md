@@ -8,7 +8,7 @@ Python版Claude Agent SDKで、プロンプトファイルがどのように読�
 
 ```
 claude-prompt-search/
-├── main.py                  # 検証スクリプト（3つのパターンをテスト）
+├── main.py                  # 検証スクリプト（4つのパターンをテスト）
 ├── requirements.txt         # Python依存関係
 ├── CLAUDE.md               # プロジェクト統一プロンプト
 ├── prompts-repo/
@@ -56,10 +56,11 @@ source venv/bin/activate
 python main.py
 ```
 
-スクリプトは3つのパターンを順番にテストします：
+スクリプトは4つのパターンを順番にテストします：
 1. CLAUDE.md のみ
 2. 外部プロンプト（Design.md）のみ
-3. 両方を同時に使用
+3. 外部プロンプト + CLAUDE.md（両方を同時に使用）
+4. Claude Code + 外部プロンプト（append）+ CLAUDE.md
 
 実行結果は画面とログファイル（`prompt_loading.log`）に出力されます。
 
@@ -159,16 +160,73 @@ your-project/
 
 ---
 
-## 📋 3つのパターンの比較
+### パターン4: Claude Code + 外部プロンプト（append）+ CLAUDE.md
 
-| 項目 | CLAUDE.md のみ | 外部ファイルのみ | 両方を使用 |
-|------|----------------|-----------------|-----------|
-| **設定方法** | `setting_sources=["project"]` | `system_prompt=読み込んだ内容` | 両方を指定 |
-| **ファイル名** | 固定（CLAUDE.md） | 自由（任意の名前） | 両方 |
-| **配置場所** | プロジェクトルート | 任意の場所 | 両方 |
-| **読み込み確認** | ✅ 完全に読み込まれる | ✅ 完全に読み込まれる | ✅ 両方読み込まれる |
-| **優先順位** | 単独使用時は最優先 | 単独使用時は最優先 | `system_prompt`が優先 |
-| **用途** | プロジェクト統一プロンプト | マルチエージェント | エージェント+プロジェクト情報 |
+**設定コード:**
+```python
+from claude_agent_sdk import ClaudeAgentOptions
+from pathlib import Path
+
+# 外部ファイルを読み込む
+with open("prompts-repo/Design.md", 'r', encoding='utf-8') as f:
+    external_prompt = f.read()
+
+options = ClaudeAgentOptions(
+    system_prompt={
+        "type": "preset",
+        "preset": "claude_code",  # Claude Code標準プロンプト（ベース）
+        "append": external_prompt  # Design.mdを追加
+    },
+    setting_sources=["project"],  # CLAUDE.md も読み込む
+)
+```
+
+**ファイル配置:**
+```
+your-project/
+├── CLAUDE.md                # プロジェクト固有の情報
+└── prompts-repo/
+    └── Design.md            # 追加するプロンプト
+```
+
+**結果:**
+- ✅ 3つすべてが読み込まれる（Claude Code標準 + Design.md + CLAUDE.md）
+- ✅ Claude Code標準プロンプトが**ベース**として機能
+- ✅ Design.mdが**append**で追加統合される
+- ✅ CLAUDE.mdは`<system-reminder>`タグ内に配置（補足コンテキスト）
+- 📌 **ハイブリッド構成**: Claude Codeの機能を保持しつつ、Design Agentの専門性も追加
+
+**統合の階層構造:**
+```
+┌─────────────────────────────────────────────┐
+│ Claude Code標準プロンプト（ベース）           │
+│ - ツール使用、Git操作、ファイル操作          │
+│                                             │
+│   + Design.md（appendで統合）               │
+│     - Design Agent専門性を追加              │
+│                                             │
+│   + CLAUDE.md（<system-reminder>）          │
+│     - 条件付きコンテキスト情報               │
+└─────────────────────────────────────────────┘
+```
+
+**役割:**
+- **主要機能**: Claude Code（エンジニアリングアシスタント）
+- **専門性拡張**: Design Agent（設計とアーキテクチャ）
+- **コンテキスト**: CLAUDE.md（プロジェクト固有情報）
+
+---
+
+## 📋 4つのパターンの比較
+
+| 項目 | パターン1:<br>CLAUDE.md のみ | パターン2:<br>外部ファイルのみ | パターン3:<br>両方を使用 | パターン4:<br>append使用 |
+|------|----------------|-----------------|-----------|-----------|
+| **設定方法** | `setting_sources=["project"]` | `system_prompt=読み込んだ内容` | 両方を指定 | `preset`+`append`+`setting_sources` |
+| **Claude Code標準** | ✅ ベース | ❌ | ❌ | ✅ ベース |
+| **外部プロンプト** | ❌ | ✅ メイン | ✅ メイン | ✅ 追加 |
+| **CLAUDE.md** | ✅ 補足 | ❌ | ✅ 補足 | ✅ 補足 |
+| **主要な役割** | Claude Code | Design Agent | Design Agent | **ハイブリッド** |
+| **用途** | プロジェクト統一プロンプト | マルチエージェント（完全制御） | エージェント+プロジェクト情報 | Claude Code機能+専門性拡張 |
 
 ---
 
@@ -262,6 +320,35 @@ You are a helpful assistant for testing prompt loading order."
 Design Agent（ソフトウェアアーキテクチャ、UX/UI設計の専門家）
 ```
 
+### パターン4の実行結果
+
+```
+【パターン4】Claude Code + append + CLAUDE.md - 検証結果
+================================================================================
+
+読み込まれたプロンプト:
+✅ Claude Code標準プロンプト: ベースとして読み込まれている
+✅ Design.md: appendで追加統合されている
+✅ CLAUDE.md: <system-reminder>内に配置（補足コンテキスト）
+
+統合の階層構造:
+1. Claude Code標準 - コアシステムプロンプトとして機能
+2. Design.md - "Design Agent System Prompt"セクションとして追加統合
+3. CLAUDE.md - <system-reminder>タグ内でコンテキスト情報として提供
+
+あなたの役割:
+**ハイブリッド構成**
+- 主要機能: Claude Code（エンジニアリングアシスタント）
+  - コード編集、バグ修正、Git操作、ファイル操作
+- 専門性拡張: Design Agent（設計とアーキテクチャ）
+  - アーキテクチャ決定、UX/UIデザインレビュー、システム設計パターン
+
+影響の度合い:
+1. 最も強い影響: Claude Code標準プロンプト（ツール使用、動作パターン）
+2. 専門性の追加: Design.md（設計関連タスクでの専門的アプローチ）
+3. 条件付きコンテキスト: CLAUDE.md（タスクに関連する場合のみ）
+```
+
 ---
 
 ## 📚 使用例
@@ -313,6 +400,25 @@ options = ClaudeAgentOptions(
 )
 ```
 
+### Claude Code機能を拡張（appendパターン）
+
+```python
+# Claude Codeの機能を保持しつつ、専門性を追加
+with open("prompts-repo/Design.md", 'r', encoding='utf-8') as f:
+    design_prompt = f.read()
+
+options = ClaudeAgentOptions(
+    system_prompt={
+        "type": "preset",
+        "preset": "claude_code",  # ベース: Claude Code標準機能
+        "append": design_prompt    # 追加: Design Agentの専門性
+    },
+    setting_sources=["project"]    # 補足: プロジェクト固有の情報
+)
+```
+
+**用途**: エンジニアリング作業とデザイン作業の両方を1つのエージェントで行いたい場合
+
 ---
 
 ## 🎓 まとめ
@@ -333,6 +439,12 @@ options = ClaudeAgentOptions(
    - 両方が読み込まれる
    - `system_prompt` が優先される（メインの役割を定義）
    - `setting_sources` は補足情報として扱われる（`<system-reminder>` 内）
+
+4. **appendを使った拡張（パターン4）**
+   - Claude Code標準 + 外部プロンプト + CLAUDE.md の3つすべてが読み込まれる
+   - Claude Code標準がベース、外部プロンプトが追加統合される
+   - **ハイブリッド構成**: 基本機能と専門性の両立が可能
+   - 用途: エンジニアリング作業と専門作業の両方を行うエージェント
 
 ### 検証方法
 
@@ -376,6 +488,8 @@ ls -la prompts-repo/
 
 ---
 
-**調査日**: 2025-11-29
+**調査日**: 2025-11-29 - 2025-11-30
 **検証方法**: Claude自身に読み込んだプロンプトの内容を報告させる
-**結論**: CLAUDE.md、外部プロンプトファイル、両方の組み合わせ、すべてのパターンで完全に読み込まれることを確認
+**結論**:
+- CLAUDE.md、外部プロンプトファイル、両方の組み合わせ、すべてのパターンで完全に読み込まれることを確認
+- `append`オプションを使うことで、Claude Code標準機能と専門性を組み合わせたハイブリッド構成が可能
